@@ -1,3 +1,7 @@
 openai
 python-dotenv
 Pillow
+requests
+numpy
+opencv-python-headless
+rapidocr-onnxruntime
