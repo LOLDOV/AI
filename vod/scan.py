@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from vod.hud import HudReader
-from vod.video import iter_frames
+from vod.video import iter_frames, probe
 
 # 영상을 한 번 훑으며 초 단위 신호를 기록한다.
 #  - game_sec: HUD 시계 OCR (시간 동기화용)
@@ -36,7 +36,9 @@ def bar_ratio(hsv, ranges, kernel):
     return float(np.count_nonzero(mask)) / mask.size
 
 
-def scan_video(path, sample_fps=SAMPLE_FPS, log_every=120):
+def scan_video(path, sample_fps=SAMPLE_FPS, log_every=120, progress=None):
+    """progress: optional callable(fraction 0~1)."""
+    duration = probe(path)['duration_sec']
     hud = HudReader()
     rows = []
     prev_small = None
@@ -72,6 +74,8 @@ def scan_video(path, sample_fps=SAMPLE_FPS, log_every=120):
             row['blue'], row['red'] = hud.read_score(frame)
         rows.append(row)
 
+        if progress and len(rows) % 10 == 0:
+            progress(min(1.0, video_sec / duration))
         if log_every and len(rows) % log_every == 0:
             print(f'  scanned {video_sec:.0f}s (clock={row["game_sec"]}, score={row["blue"]}:{row["red"]})')
 

@@ -40,6 +40,10 @@ PROMPT = """당신은 리그 오브 레전드(LoL) 리플레이를 복기하는 
 """
 
 
+def vlm_available():
+    return all(os.getenv(k, '').strip() for k in ('DASHSCOPE_API_KEY', 'DASHSCOPE_BASE_URL', 'QWEN_MODEL'))
+
+
 def client_from_env():
     api_key = os.getenv('DASHSCOPE_API_KEY', '').strip()
     base_url = os.getenv('DASHSCOPE_BASE_URL', '').strip()
@@ -50,7 +54,7 @@ def client_from_env():
         ('QWEN_MODEL', model),
     ) if not value]
     if missing:
-        raise SystemExit('Missing .env settings: ' + ', '.join(missing))
+        raise RuntimeError('Missing .env settings: ' + ', '.join(missing))
     return OpenAI(api_key=api_key, base_url=base_url, timeout=180.0), model
 
 
@@ -71,10 +75,19 @@ def summarize_events(scene):
     return '\n'.join(lines) or '- 없음'
 
 
-def build_messages(scene, frames):
+def player_line(player):
+    if not player or not player.get('team'):
+        return '분석 대상 플레이어의 팀: 판독 불가'
+    side = '왼쪽' if player['team'] == 'blue' else '오른쪽'
+    team = '블루' if player['team'] == 'blue' else '레드'
+    return (f"분석 대상 플레이어: {team} 팀 ({side} 초상화 열 {player['slot'] + 1}번째). "
+            f"{team} 팀 킬은 아군 킬, 상대 팀 킬은 아군이 잃은 킬입니다.")
+
+
+def build_messages(scene, frames, player=None):
     header = (
         f"장면 순위 {scene['rank']}, 게임 시간 {scene['game_time']}, "
-        f"출처 {', '.join(scene['sources'])}\n검출 이벤트:\n{summarize_events(scene)}"
+        f"출처 {', '.join(scene['sources'])}\n{player_line(player)}\n검출 이벤트:\n{summarize_events(scene)}"
     )
     content = [{'type': 'text', 'text': PROMPT + '\n\n' + header}]
     for frame in frames:
@@ -98,9 +111,9 @@ def parse_json(text):
     return None
 
 
-def analyze_scene(scene, frames, client=None, model=None, dry_run=False):
+def analyze_scene(scene, frames, client=None, model=None, dry_run=False, player=None):
     """Returns a dict with the parsed analysis plus call log (model, latency, tokens)."""
-    messages = build_messages(scene, frames)
+    messages = build_messages(scene, frames, player)
     log = {'rank': scene['rank'], 'frames': [f['frame_id'] for f in frames]}
 
     if dry_run:
