@@ -1,0 +1,25 @@
+﻿old_file,disposition,new_runtime_or_tool,original_role,important_caveat
+OpenCV/video_preprocessing.py,ARCHIVE,pipeline/core.py (일부 대체),옛 단일 영상 추출 스크립트. 원본 1.mp4 하드코딩,실행 경로 제외; 예전 실험 재현에만 필요
+OpenCV/video_event_candidates.py,ARCHIVE_UNIQUE,pipeline/core.py auto_scenes (기능 일부만 대체),초상화 추적/HP 하락 및 선택적 Riot 타임라인 후보 추출,새 auto-scenes는 HP 하락만 보는 약한 탐지. 원본 탐지 기능과 동등하지 않음
+OpenCV/group_qiyana_events.py,ARCHIVE_UNIQUE,pipeline/core.py 장면 범위·프레임 관리 (부분),키아나 전용 후보 그룹화·클립 추출,특정 챔피언 그룹 로직은 범용화 전에 재설계 필요
+OpenCV/extract_candidate_frames.py,ARCHIVE_UNIQUE,pipeline/core.py 추출 (부분),"원본 MP4/게임 시간 동기화, 복수 후보 프레임 선별",게임 시계 동기화 기능은 새 파이프라인에 아직 없음
+OpenCV/hud_analyzer.py,ARCHIVE,pipeline/core.py write_hud_timeline,선택 장면 HUD 크롭 및 주석 이미지 저장,정적 크롭 도구는 신규 기본 파이프라인에서 제외
+OpenCV/hud_temporal_sampler.py,MERGED,pipeline/core.py write_hud_timeline,HUD 시계열 프레임 추출,0.5초 샘플; 단일 엔트리포인트 사용
+OpenCV/hud_temporal_recognizer.py,MOVED,pipeline/engines/visual_recognizer.py,QWER 스킬 아이콘 시각 후보 판독,v2 알고리즘 유지. 독립 원본 파일은 실행 경로 제외
+OpenCV/hud_skill_level_detector.py,MOVED,pipeline/engines/skill_level_zero.py,레벨 0 숫자 템플릿 인식,해당 HUD에서만 교정된 템플릿; 새 HUD는 기본적으로 비활성
+OpenCV/hud_cc_context.py,MOVED,pipeline/engines/cc_context.py,두 스킬 암전 및 부분 복귀 기반 CC 후보 탐지,v2 누락 보완 코드 유지; CC 유형은 미확인
+OpenCV/record_verified_cc.py,MOVED_EVALUATION,evaluation/record_verified_cc.py,사람이 확인한 CC 라벨 CSV 기록,자동 A/B 증거로 사용하지 않음
+OpenCV/evaluate_hud_predictions.py,MOVED_EVALUATION,evaluation/evaluate_hud_predictions.py,수작업 HUD 라벨 대비 판정률,해당 프레임 검증용
+OpenCV/summoner_spell_probe.py,MOVED_MERGED,pipeline/spells.py,D/F 아이콘 비교·Data Dragon 참조 캐시,통합 analyze --with-spells에서 호출. 영상 ID별 독립 출력
+gemini/analyze_candidate_frames.py,ARCHIVE,pipeline/experiment.py (새 A/B 호출),장면 후보 JPEG별 Gemini 호출,기존 원문 로그는 results/gemini_candidates 유지
+gemini/analyze_hud_crops.py,ARCHIVE,pipeline/engines/* + experiment.py (대체 워크플로),HUD 정지 이미지 Gemini 보조 검토,기존 HUD VLM 보고서 재현용 원본 보존
+gemini/gemini_test.py,ARCHIVE,pipeline/experiment.py,초기 Gemini 모델 API 시험,초기 단일 프롬프트 API 테스트
+gemini/hud_report_audit.py,ARCHIVE,pipeline/experiment.py _validate_refs (부분),기존 Gemini 텍스트 키워드 감사,텍스트 감사를 완전히 대체하진 않음
+gemini/hud_validation.py,ARCHIVE_UNIQUE,pipeline/evidence.py 근거 필터 (부분),기존 HUD VLM 결과의 모순/불확실성 검사,원본 수치·문장 검증은 독립 기능. 필요시 추후 이관
+gemini/integrate_episode_coaching_with_hud.py,ARCHIVE_UNIQUE,pipeline/experiment.py (새 JSON A/B),초기 에피소드/HUD 결합형 Gemini 리포트,새 JSON 포맷은 옛 Markdown 리포트 생성과 완전 동등하지 않음
+gemini/merge_verified_hud_cc.py,ARCHIVE_MANUAL,자동 A/B와 의도적으로 분리,사람 확인 근거를 기존 보고서에 병합,수작업 보정 효과 실험용 레거시로 보존
+gemini/verify_cc_fullscreen.py,MOVED_EVALUATION,evaluation/verify_cc_fullscreen.py,CC 근접 전체 화면 추출·선택적 Gemini 확인,기본 API 없음; --run에서만 비용 발생
+OCR/hp_ocr_eval.py,ARCHIVE_EXPERIMENT,"OCR/hp_paddle_benchmark.py (다른 실험, 대체 아님)",HP Tesseract v1 비교,"낮은 정확도, 이전 결과 재현용으로 원본 보존"
+OCR/hp_ocr_eval_v2.py,ARCHIVE_EXPERIMENT,"OCR/hp_paddle_benchmark.py (다른 실험, 대체 아님)",Tesseract v2 전처리·판정 실험,v1 의존성 있으므로 기존 쌍 원본 보존
+OCR/hp_paddle_benchmark.py,MOVED_OPTIONAL,OCR/hp_paddle_benchmark.py,HP PaddleOCR v3 성능 시험,"실험 전용, 자동 코칭에서는 숫자 비활성"
+rag/apply_smite_rag.py,MOVED_EVALUATION,pipeline/smite_rag_review.py,사용자 파란 정글 동료 확인 기반 보정,"수동 검증 전용, 모델 A/B 입력에는 정답 정보 누출 금지"

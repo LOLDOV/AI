@@ -1,0 +1,8 @@
+{
+  "profile_id": "lol_1282x832_observed_v1",
+  "reference_size": [1282,832],
+  "ability_row_roi_ref": [0,708,225,741],
+  "hp_fill_roi_ref": [57,663,128,675],
+  "calibration_status": "sample_specific_not_generalized",
+  "notes": "Only reuse if LoL selected-champion spectator HUD layout matches. Scaling by video resolution does not ensure UI scaling or theme compatibility."
+}
