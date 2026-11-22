@@ -1,0 +1,5 @@
+# Only needed for pipeline/ code, not replacing your existing requirements.txt.
+opencv-python>=4.8
+numpy>=1.26
+google-genai>=1.30
+python-dotenv>=1.0

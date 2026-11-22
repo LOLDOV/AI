@@ -1,0 +1,50 @@
+{
+  "knowledge_base_id": "lol-smite-pet-2026-v1",
+  "verified_as_of": "2026-11-22",
+  "scope": "League of Legends PC Summoner's Rift, 2026 season; check actual VOD patch separately",
+  "game_patch_caution": "A Data Dragon reference version (e.g. 16.23.1) is not proof of the recorded game's patch",
+  "facts": [
+    {
+      "id": "pet_three_colors",
+      "keywords": ["정글", "동료", "펫", "파랑", "빨강", "초록", "gustwalker", "mosstomper", "scorchclaw"],
+      "text_ko": "정글러의 정글 동료는 파란 돌풍걸음이(Gustwalker), 빨간 화염발톱(Scorchclaw), 초록 이끼쿵쿵이(Mosstomper)로 나뉜다. 선택한 동료가 성장하면 강타가 진화하고 동료별 보너스 효과가 적용된다.",
+      "source": "https://www.leagueoflegends.com/en-gb/news/game-updates/patch-12-22-notes/",
+      "source_kind": "Riot official; pet system origin; numeric stats require 2026 patch updates"
+    },
+    {
+      "id": "upgrade_icon_changes",
+      "keywords": ["강타", "진화", "업그레이드", "아이콘", "단계", "smite", "primal", "unleashed"],
+      "text_ko": "강타(Smite)는 정글 동료 성장에 따라 강화되며 HUD 소환사 주문 아이콘도 바뀔 수 있다. 같은 D 슬롯의 초기 강타와 후기 진화 강타를 서로 다른 주문으로 분류하면 안 된다.",
+      "source": "https://www.leagueoflegends.com/en-gb/news/game-updates/patch-12-22-notes/",
+      "source_kind": "Riot official; icon change mechanics"
+    },
+    {
+      "id": "patch_2026_upgrade_rules",
+      "keywords": ["2026", "26.1", "스택", "15", "35", "피해량", "600", "1000", "1400"],
+      "text_ko": "2026 패치 26.1 기준 정글 동료 첫 진화는 15스택, 최종 진화는 35스택. 강타의 몬스터 대상 피해량 단계는 600/1000/1400이며 2022년의 600/900/1200 수치를 현재 수치로 사용하면 안 된다.",
+      "source": "https://www.leagueoflegends.com/en-us/news/game-updates/patch-26-1-notes/",
+      "source_kind": "Riot official, 26.1 patch"
+    },
+    {
+      "id": "blue_pet_effect",
+      "keywords": ["파란", "블루", "돌풍걸음이", "gustwalker", "이동", "풀숲", "movement"],
+      "text_ko": "파란 정글 동료 Gustwalker(돌풍걸음이)의 최종 강화 보상은 기동성/풀숲 이동속도 관련 효과다. 패치 26.1에서 이 효과의 지속시간이 2초에서 1.5초로 조정되었다. 정글 퀘스트 완료로 받는 공통 이동속도 보상과 파란 동료 전용 효과를 혼동하지 말 것.",
+      "source": "https://www.leagueoflegends.com/en-us/news/game-updates/patch-26-1-notes/",
+      "source_kind": "Riot official, 26.1 patch"
+    },
+    {
+      "id": "other_pet_effects",
+      "keywords": ["빨강", "초록", "화염발톱", "이끼쿵쿵이", "scorchclaw", "mosstomper", "보호막", "둔화"],
+      "text_ko": "붉은 정글 동료 Scorchclaw는 공격/피해 및 둔화 계열, 초록 동료 Mosstomper는 보호막 계열 보상을 제공한다. 세부 수치는 패치 의존적이다. 과거 Mosstomper의 강인함/둔화 저항 효과는 13.20에서 삭제되었으므로 오래된 수치를 그대로 설명하지 않는다.",
+      "source": "https://www.leagueoflegends.com/en-sg/news/game-updates/patch-13-20-notes/",
+      "source_kind": "Riot official, 13.20 adjustment"
+    },
+    {
+      "id": "spell_cast_not_inferred",
+      "keywords": ["쿨타임", "시전", "사용", "available", "cooldown", "ready"],
+      "text_ko": "스펠의 종류, 진화 단계, 사용 시점, 남은 쿨타임은 서로 다른 정보다. 컬러·흑백 정지 이미지나 단일 템플릿 일치만으로 시전 여부나 시전하지 않은 실수를 확정하지 않는다.",
+      "source": "project://hud_spells_safety_rules",
+      "source_kind": "Project validation rule"
+    }
+  ]
+}

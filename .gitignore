@@ -1,15 +1,38 @@
+# Python virtual environments
 .venv/
+venv/
+
+# Python caches and tooling
 __pycache__/
-*.pyc
-*data
-/qwen/events/
-/qwen/qwen_test
+*.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Secrets and local environment (keep example templates)
 .env
+.env.*
+!.env.example
+
+# Local IDE / OS files
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
+
+# VOD, personal Riot data, and generated analysis outputs
+/videos/
+/data/
+/results/
 *.mp4
+*.avi
+*.mkv
+*.mov
+
+# Model weights and logs
 *.pt
 *.pth
 *.ckpt
+*.safetensors
+*.log
