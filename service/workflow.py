@@ -3,6 +3,7 @@
 This is *not* a production distributed queue. Do not host on the public internet.
 """
 from __future__ import annotations
+import contextlib
 import os
 import re
 import subprocess
@@ -52,12 +53,12 @@ def _call(job_id: str, args: list[str], log, stage: str):
 
 def _hud_ocr_anchor(video: Path, discovery_id: str) -> dict:
     """Clock offset from vod/ RapidOCR scan; cached next to the discovery result."""
-    from vod.scan import scan_video
     from vod.sync import build_sync
     cache = ROOT / 'results' / 'discovery' / discovery_id / 'hud_scan.json'
     if cache.is_file():
         scan = load(cache)
     else:
+        from vod.scan import scan_video
         scan = scan_video(video, log_every=0)
         dump(cache, scan)
     if scan.get('clock_box') is None:
@@ -69,6 +70,23 @@ def _hud_ocr_anchor(video: Path, discovery_id: str) -> dict:
     seg = max(sync['segments'], key=lambda s: s['points'])
     return {'video_sec': seg['video_start'], 'game_sec': seg['game_start'],
             'segments': sync['segments'], 'clock_read_rate': sync['clock_read_rate']}
+
+
+def _death_coaching(job_id: str, video: Path, match_id: str, puuid: str, discovery_id: str, log):
+    """Death-scene coaching (link/). Failure here keeps the main report.
+    Output: results/link/<discovery_id>/web/full/results.json"""
+    update_job(job_id, stage='death_coaching')
+    print('[death_coaching] starting', file=log, flush=True)
+    try:
+        from link.run import main as link_main
+        with contextlib.redirect_stdout(log):
+            link_main(['run', '--video', str(video), '--video-id', discovery_id, '--match-id', match_id,
+                       '--puuid', puuid, '--conditions', 'full', '--run-tag', 'web',
+                       '--scan-cache', str(ROOT / 'results' / 'discovery' / discovery_id / 'hud_scan.json'),
+                       '--fetch', '--execute'])
+    except (Exception, SystemExit) as exc:
+        print('[death_coaching] failed, main report kept:', SECRET_RE.sub('[REDACTED_RIOT_KEY]', str(exc))[:500],
+              file=log, flush=True)
 
 
 def run_analysis(job_id: str, video: Path, match_id: str, puuid: str, champion: str,
@@ -124,6 +142,7 @@ def run_analysis(job_id: str, video: Path, match_id: str, puuid: str, champion: 
             expected = len(discovery.get('selected_scenes',[]))
             if not generated or len(generated) != expected:
                 raise RuntimeError(f'coaching 결과 불완전: {len(generated)}/{expected}장면. API 오류/할당량을 확인하세요')
+            _death_coaching(job_id, video, match_id, puuid, discovery_id, log)
             update_job(job_id,status='complete',stage='done')
     except Exception as exc:
         error = SECRET_RE.sub('[REDACTED_RIOT_KEY]',str(exc))[:1000]
