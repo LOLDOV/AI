@@ -9,7 +9,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from pipeline.core import ROOT, load
+from pipeline.core import ROOT, dump, load
 from RIOT.time_sync import estimate_from_video
 from .storage import update_job
 
@@ -50,6 +50,27 @@ def _call(job_id: str, args: list[str], log, stage: str):
         raise RuntimeError(f'{stage} 단계 실패(exit={code}): ' + ' | '.join(recent)[-1200:])
 
 
+def _hud_ocr_anchor(video: Path, discovery_id: str) -> dict:
+    """Clock offset from vod/ RapidOCR scan; cached next to the discovery result."""
+    from vod.scan import scan_video
+    from vod.sync import build_sync
+    cache = ROOT / 'results' / 'discovery' / discovery_id / 'hud_scan.json'
+    if cache.is_file():
+        scan = load(cache)
+    else:
+        scan = scan_video(video, log_every=0)
+        dump(cache, scan)
+    if scan.get('clock_box') is None:
+        raise RuntimeError('game clock not found on screen')
+    sync = build_sync(scan['rows'])
+    if not sync['segments']:
+        raise RuntimeError('no consistent clock segment')
+    # RAG build takes one offset; use the longest segment if the replay was paused or sped up.
+    seg = max(sync['segments'], key=lambda s: s['points'])
+    return {'video_sec': seg['video_start'], 'game_sec': seg['game_start'],
+            'segments': sync['segments'], 'clock_read_rate': sync['clock_read_rate']}
+
+
 def run_analysis(job_id: str, video: Path, match_id: str, puuid: str, champion: str,
                  role: str, discovery_id: str):
     LOG_DIR.mkdir(parents=True,exist_ok=True)
@@ -70,19 +91,30 @@ def run_analysis(job_id: str, video: Path, match_id: str, puuid: str, champion: 
             if discovery.get('status') != 'complete':
                 raise RuntimeError(f'discover 미완료: {discovery.get("status")}')
             update_job(job_id,stage='time_sync')
-            sync = estimate_from_video(video)
-            print('[TIME_SYNC]', sync, file=log,flush=True)
             cmds = ['RAG.cli','build','--discovery-id',discovery_id,
                     '--match-id',match_id,'--puuid',puuid,
                     '--confirm-same-match','--fetch']
-            # Only attach timeline events if repeated clock observations agree.
-            if sync.get('status') == 'ocr_candidate_not_riot_event_verified':
-                point = sync['samples'][0]
-                cmds += ['--sync-video',str(point['video_sec']),
-                         '--sync-game',str(point['game_sec']), '--sync-source','ocr_clock']
+            try:
+                anchor = _hud_ocr_anchor(video, discovery_id)
+            except Exception as exc:
+                anchor = None
+                print('[TIME_SYNC] RapidOCR unavailable, falling back to Tesseract:', exc, file=log, flush=True)
+            if anchor:
+                print('[TIME_SYNC] RapidOCR', anchor, file=log, flush=True)
+                cmds += ['--sync-video',str(anchor['video_sec']),
+                         '--sync-game',str(anchor['game_sec']), '--sync-source','ocr_clock']
                 sync_state = 'ocr_candidate_estimate_not_independently_verified'
             else:
-                sync_state = 'unavailable_no_timeline_events'
+                sync = estimate_from_video(video)
+                print('[TIME_SYNC]', sync, file=log,flush=True)
+                # Only attach timeline events if repeated clock observations agree.
+                if sync.get('status') == 'ocr_candidate_not_riot_event_verified':
+                    point = sync['samples'][0]
+                    cmds += ['--sync-video',str(point['video_sec']),
+                             '--sync-game',str(point['game_sec']), '--sync-source','ocr_clock']
+                    sync_state = 'ocr_candidate_estimate_not_independently_verified'
+                else:
+                    sync_state = 'unavailable_no_timeline_events'
             update_job(job_id,sync_status=sync_state)
             _call(job_id,cmds,log,'riot_rag_build')
             # Default final service makes only assisted coaching; A/B is an experiment.
