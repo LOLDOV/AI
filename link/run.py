@@ -40,6 +40,8 @@ OUT = ROOT / 'results' / 'link'
 
 
 def model_name(arg=None):
+    from RIOT.client import _load_env  # read .env before looking up GEMINI_MODEL
+    _load_env()
     return arg or os.getenv('GEMINI_MODEL', 'gemini-3.6-flash')
 
 
