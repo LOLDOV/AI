@@ -6,3 +6,5 @@ python-multipart>=0.0.9,<1.0
 # pytesseract>=0.3.10
 # Local integration tests use FastAPI TestClient:
 httpx>=0.25,<1.0
+# HUD clock/score OCR used by vod/ for time sync
+rapidocr-onnxruntime>=1.3
