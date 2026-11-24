@@ -50,6 +50,98 @@ COACHING_SIGNALS = {
 PLAYER_RELEVANCE = {'direct', 'indirect', 'unclear', 'none'}
 
 
+# Request a structured response in addition to the plain-language instructions.
+# Local validation remains mandatory: schema mode does not guarantee factual accuracy.
+WINDOW_RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'windows': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'window_id': {'type': 'string'},
+                    'category': {'type': 'string', 'enum': sorted(CATEGORIES)},
+                    'importance': {'type': 'integer', 'minimum': 0, 'maximum': 5},
+                    'player_relevance': {'type': 'string', 'enum': sorted(PLAYER_RELEVANCE)},
+                    'coaching_signals': {
+                        'type': 'array', 'items': {'type': 'string', 'enum': sorted(COACHING_SIGNALS)}
+                    },
+                    'evidence_images': {'type': 'array', 'items': {'type': 'string'}},
+                    'why': {'type': 'string'},
+                },
+                'required': [
+                    'window_id', 'category', 'importance', 'player_relevance',
+                    'coaching_signals', 'evidence_images', 'why',
+                ],
+            },
+        },
+    },
+    'required': ['windows'],
+}
+
+
+class InvalidModelResponse(ValueError):
+    """A paid API call returned JSON that cannot be safely used as labels."""
+
+
+class QuotaPause(RuntimeError):
+    """Do not issue further requests in this run after a rate-limit response."""
+
+
+def _validate_model_response(obj: object, windows: list) -> None:
+    """Reject missing/duplicated IDs so an incomplete batch never becomes a false negative."""
+    if not isinstance(obj, dict) or not isinstance(obj.get('windows'), list):
+        raise InvalidModelResponse('Gemini response must be a JSON object with a windows list')
+    expected = {w['window_id'] for w in windows}
+    seen = set()
+    for row in obj['windows']:
+        if not isinstance(row, dict):
+            raise InvalidModelResponse('A windows entry is not a JSON object')
+        wid = row.get('window_id')
+        if not isinstance(wid, str) or wid not in expected or wid in seen:
+            raise InvalidModelResponse(f'Unexpected or duplicate window_id: {wid!r}')
+        seen.add(wid)
+        required = {'category', 'importance', 'player_relevance',
+                    'coaching_signals', 'evidence_images', 'why'}
+        missing = sorted(required - row.keys())
+        if missing:
+            raise InvalidModelResponse(f'{wid} is missing fields: {", ".join(missing)}')
+        if row['category'] not in CATEGORIES:
+            raise InvalidModelResponse(f'{wid}: invalid category {row["category"]!r}')
+        if type(row['importance']) is not int or not 0 <= row['importance'] <= 5:
+            raise InvalidModelResponse(f'{wid}: importance must be an integer from 0 to 5')
+        if row['player_relevance'] not in PLAYER_RELEVANCE:
+            raise InvalidModelResponse(f'{wid}: invalid player_relevance')
+        if not isinstance(row['coaching_signals'], list) or not isinstance(row['evidence_images'], list):
+            raise InvalidModelResponse(f'{wid}: coaching_signals/evidence_images must be arrays')
+        if not isinstance(row['why'], str):
+            raise InvalidModelResponse(f'{wid}: why must be a string')
+    if seen != expected:
+        raise InvalidModelResponse(f'Missing window IDs: {", ".join(sorted(expected-seen))}')
+
+
+def _api_status_code(exc: Exception) -> int | None:
+    for field in ('code', 'status_code'):
+        value = getattr(exc, field, None)
+        try:
+            code = int(value)
+        except (ValueError, TypeError):
+            continue
+        if 400 <= code <= 599:
+            return code
+    match = re.match(r'^\s*(4\d\d|5\d\d)\b', str(exc))
+    return int(match.group(1)) if match else None
+
+
+def _quota_kind(exc: Exception) -> str:
+    message = str(exc).lower()
+    if any(term in message for term in ('perday', 'per_day', 'per day',
+                                        'requests per day', 'daily quota')):
+        return 'daily'
+    return 'rate_limit'
+
+
 def _is_eligible(row: dict, minimum_score: int = 5) -> bool:
     if row.get('score', 0) < minimum_score or row.get('player_relevance') == 'none':
         return False
@@ -140,40 +232,71 @@ def _response_json(body:str):
         return json.loads(re.sub(r'^```(?:json)?\s*|\s*```$', '', body.strip(),flags=re.I))
 
 
-def _gemini_json(model:str,prompt:str,windows:list,retries:int=2):
+def _gemini_json(model: str, prompt: str, windows: list, retries: int = 2,
+                 response_log_path: Path | None = None):
     from google import genai
     from google.genai import types
-    key=os.getenv('GEMINI_API_KEY')
-    if not key:raise EnvironmentError('Missing GEMINI_API_KEY. Set it in project .env')
-    client=genai.Client(api_key=key,http_options=types.HttpOptions(timeout=180000))
-    parts=[types.Part.from_text(text=prompt)]
+    key = os.getenv('GEMINI_API_KEY')
+    if not key:
+        raise EnvironmentError('Missing GEMINI_API_KEY. Set it in project .env')
+
+    # A stale SDK might silently ignore the schema. Fail locally before spending quota.
+    fields = getattr(types.GenerateContentConfig, 'model_fields', {})
+    if 'response_json_schema' not in fields:
+        raise RuntimeError('google-genai SDK needs update: python -m pip install -U google-genai')
+
+    client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=180000))
+    parts = [types.Part.from_text(text=prompt)]
     for w in windows:
-        parts.append(types.Part.from_text(text=f"WINDOW {w['window_id']} | MP4 {timecode(w['start_sec'])} - {timecode(w['end_sec'])}"))
+        parts.append(types.Part.from_text(
+            text=f"WINDOW {w['window_id']} | MP4 {timecode(w['start_sec'])} - {timecode(w['end_sec'])}"))
         for im in w['images']:
-            p=ROOT/im['file']
-            if hashlib.sha256(p.read_bytes()).hexdigest()!=im['sha256']:
-                raise RuntimeError(f'Storyboard image changed: {p}')
+            path = ROOT / im['file']
+            if hashlib.sha256(path.read_bytes()).hexdigest() != im['sha256']:
+                raise RuntimeError(f'Storyboard image changed: {path}')
             parts.append(types.Part.from_text(text=f"IMAGE {im['image_id']} MP4 {im['timecode']}"))
-            parts.append(types.Part.from_bytes(data=p.read_bytes(),mime_type='image/jpeg'))
-    for attempt in range(retries+1):
+            parts.append(types.Part.from_bytes(data=path.read_bytes(), mime_type='image/jpeg'))
+
+    config = types.GenerateContentConfig(
+        temperature=0, response_mime_type='application/json',
+        response_json_schema=WINDOW_RESPONSE_SCHEMA)
+    # Backoff applies to transient transport/server errors, not exhausted daily quotas.
+    for attempt in range(retries + 1):
         try:
-            response=client.models.generate_content(
-                model=model,contents=[types.Content(role='user',parts=parts)],
-                config=types.GenerateContentConfig(temperature=0,response_mime_type='application/json'))
-            if not response.text:raise RuntimeError('Empty Gemini response')
-            obj=_response_json(response.text)
-            if not isinstance(obj,dict) or not isinstance(obj.get('windows'),list):
-                raise RuntimeError('Gemini response must be JSON object with windows list')
-            return obj
-        except Exception as e:
-            code=str(getattr(e,'code',''))
-            status=str(getattr(e,'status',''))
-            message=str(e)
-            retryable= bool(re.search(r'\b(408|429|500|502|503|504)\b|UNAVAILABLE|RESOURCE_EXHAUSTED',
-                                      ' '.join((code,status,message)),re.I))
-            if attempt==retries or not retryable:raise
-            delay=min(20,2**(attempt+1));print(f'[RETRY] Gemini {str(e)[:100]} ({delay}s)',flush=True)
+            response = client.models.generate_content(
+                model=model, contents=[types.Content(role='user', parts=parts)], config=config)
+        except Exception as exc:
+            code = _api_status_code(exc)
+            if code == 429 or 'RESOURCE_EXHAUSTED' in str(exc).upper():
+                kind = _quota_kind(exc)
+                raise QuotaPause(f'Gemini {kind} quota exceeded; stop requests and resume later '
+                                 'with the SAME discovery ID (cached successes are preserved).') from exc
+            if code not in {408, 500, 502, 503, 504} or attempt >= retries:
+                raise
+            delay = min(20, 2 ** (attempt + 1))
+            print(f'[RETRY] Gemini transient HTTP {code} ({delay}s)', flush=True)
             time.sleep(delay)
+            continue
+
+        raw = response.text or ''
+        try:
+            if not raw:
+                raise InvalidModelResponse('Empty Gemini response text')
+            parsed = _response_json(raw)
+            _validate_model_response(parsed, windows)
+        except (InvalidModelResponse, ValueError, TypeError) as exc:
+            # Stored under results/ (Git-ignored). Do not upload without review.
+            if response_log_path is not None:
+                dump(response_log_path, {
+                    'error': str(exc), 'window_ids': [w['window_id'] for w in windows],
+                    'model': model, 'response_text': raw,
+                    'note': 'Raw model output for local debugging only. Do not commit or publish.',
+                })
+            raise InvalidModelResponse(
+                f'Gemini returned invalid structured output ({exc}). '
+                'Saved the raw response locally when an error path is available. '
+                'No automatic retry to protect daily quota.') from exc
+        return parsed
     raise RuntimeError('Unreachable')
 
 
@@ -463,7 +586,8 @@ def discover(video:Path, discovery_id:str, model:str='gemini-3.6-flash',
         else:
             try:
                 print(f'[SCOUT {i}/{len(scout_batches)}] {timecode(batch[0]["start_sec"])} ~ {timecode(batch[-1]["end_sec"])}',flush=True)
-                reply=_gemini_json(model,_scout_prompt(batch,champion,role),batch)
+                reply=_gemini_json(model,_scout_prompt(batch,champion,role),batch,
+                                  response_log_path=out/'errors'/f'scout_{i:03d}_invalid_response.json')
                 rows=normalize_response(reply,batch)
                 if any(r.get('missing_response') for r in rows):
                     raise RuntimeError('Gemini scouting response omitted window IDs; not cached. Rerun to retry.')
@@ -474,6 +598,9 @@ def discover(video:Path, discovery_id:str, model:str='gemini-3.6-flash',
                 scout_errors.append(error)
                 dump(out/'errors'/f'scout_{i:03d}_error.json',error)
                 print(f'[ERROR] Scout batch {i}: {str(exc)[:180]}',flush=True)
+                if isinstance(exc, QuotaPause):
+                    print('[HALT] Gemini quota reached; remaining batches postponed.', flush=True)
+                    break
                 continue
         scout_rows.extend(rows)
     _save_csv(out/'all_windows.csv',
@@ -509,7 +636,8 @@ def discover(video:Path, discovery_id:str, model:str='gemini-3.6-flash',
         else:
             try:
                 print(f'[VERIFY {i}/{len(dense_batches)}] '+','.join(w['window_id'] for w in batch),flush=True)
-                reply=_gemini_json(model,_verify_prompt(batch,champion,role),batch)
+                reply=_gemini_json(model,_verify_prompt(batch,champion,role),batch,
+                                  response_log_path=out/'errors'/f'verify_{i:03d}_invalid_response.json')
                 rows=normalize_response(reply,batch)
                 if any(r.get('missing_response') for r in rows):
                     raise RuntimeError('Gemini verification response omitted window IDs; not cached. Rerun to retry.')
@@ -520,6 +648,9 @@ def discover(video:Path, discovery_id:str, model:str='gemini-3.6-flash',
                 verify_errors.append(error)
                 dump(out/'errors'/f'verify_{i:03d}_error.json',error)
                 print(f'[ERROR] Verify batch {i}: {str(exc)[:180]}',flush=True)
+                if isinstance(exc, QuotaPause):
+                    print('[HALT] Gemini quota reached; remaining batches postponed.', flush=True)
+                    break
                 continue
         verify_rows.extend(rows)
     _save_csv(out/'verified_windows.csv',verify_rows,
