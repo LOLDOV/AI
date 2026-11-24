@@ -8,8 +8,8 @@ from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent
-load_dotenv(ROOT / '.env')
+ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / '.env', override=True)
 
 API_KEY = os.getenv('RIOT_API_KEY', '').strip()
 API_HOST = 'https://asia.api.riotgames.com'
