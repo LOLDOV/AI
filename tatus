@@ -1,0 +1,15 @@
+M	.gitignore
+A	.vscode/settings.json
+M	RAG/cli.py
+M	RAG/coaching.py
+M	RAG/patch_rag.py
+M	README.md
+A	RIOT/match_resolver.py
+A	RIOT/time_sync.py
+A	requirements_service.txt
+A	service/__init__.py
+A	service/app.py
+A	service/static/index.html
+A	service/storage.py
+A	service/workflow.py
+A	tests/test_auto_service.py
