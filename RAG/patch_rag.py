@@ -41,6 +41,37 @@ def _choose_patch(versions: list, game_version: str, mode: str, override: str | 
     raise ValueError(f"경기 패치 {game_version}에 대응하는 Data Dragon 버전 없음. --patch-mode latest로 강제 대체하지 마세요")
 
 
+def _safe_item_snapshot(item: dict) -> str:
+    """Use safe item name, optional plaintext and explicit static JSON stats only.
+
+    Data Dragon `description` may contain unresolved dynamic placeholders, including
+    nonsensical 0-damage or 25000-second values after naive HTML stripping.
+    Those numbers are intentionally NOT sent to the coach.
+    """
+    name = _clean_text(item.get('name', ''))
+    plaintext = _clean_text(item.get('plaintext', ''))
+    if len(plaintext) > 180:
+        plaintext = plaintext[:180]
+    stats = item.get('stats') or {}
+    names = {
+        'FlatPhysicalDamageMod': '공격력', 'FlatHPPoolMod': '체력',
+        'FlatMagicDamageMod': '주문력', 'FlatArmorMod': '방어력',
+        'FlatSpellBlockMod': '마법 저항력', 'FlatMovementSpeedMod': '이동 속도',
+    }
+    verified = [f'{label} {stats[key]:g}' for key, label in names.items()
+                if type(stats.get(key)) in (int, float) and stats[key] > 0]
+    cost = (item.get('gold') or {}).get('total')
+    if type(cost) in (int,float) and cost > 0:
+        verified.append(f'구매 가격 {cost:g}골드')
+    bits = [f'아이템 {name}']
+    if plaintext:
+        bits.append('간단 설명: ' + plaintext)
+    if verified:
+        bits.append('정적 데이터: ' + ', '.join(verified))
+    bits.append('동적 효과 수치·재사용 대기시간은 원문 변수를 검증하지 않아 제공하지 않음')
+    return '. '.join(bits)
+
+
 def _docs_from_ddragon(champ_details: dict | None, items: dict, player: dict | None,
                        patch: str, locale: str, chosen_items: set[str]):
     docs = []
@@ -69,7 +100,7 @@ def _docs_from_ddragon(champ_details: dict | None, items: dict, player: dict | N
         if item_id not in allowed:
             continue
         docs.append({"id": f"item:{item_id}", "kind": "item", "subject": item.get("name", item_id),
-                     "text": f"아이템 {item.get('name', item_id)}: {_clean_text(item.get('description'))} ",
+                     "text": _safe_item_snapshot(item),
                      "source_url": f"{base}/item.json", "patch_version": patch,
                      "note": "경기 기록에서 등장한 아이템; 이 장면 당시 보유 여부는 미검증" if player else "패치 데이터 참고용; 실제 경기 사용 여부 미확인"})
     return docs

@@ -89,7 +89,13 @@ def build(args) -> Path:
         raise ValueError("--sync-video / --sync-game은 반드시 함께 제공하세요")
     if args.no_match and args.sync_video:
         raise ValueError("Riot 경기 연결 없이 시간 동기화할 수 없습니다")
+    if args.sync_source == "ocr_clock" and not args.sync_video:
+        raise ValueError("--sync-source ocr_clock 은 시간 앵커와 함께 사용해야 합니다")
     offset_sec = _parse_time(args.sync_video) - _parse_time(args.sync_game) if args.sync_video else None
+    sync_source = getattr(args, 'sync_source', 'user_anchor') if offset_sec is not None else 'none'
+    sync_alignment = ('ocr_clock_estimate_not_riot_event_verified' if sync_source == 'ocr_clock'
+                      else 'user_anchor_estimate_not_independently_verified' if offset_sec is not None
+                      else 'unavailable_no_clock_anchor')
 
     cache = ROOT / "data" / "riot" / "ddragon_cache"
     versions_path = cache / "versions.json"
@@ -154,8 +160,7 @@ def build(args) -> Path:
         query = f"{champion} {scene.get('why', '')} {' '.join(scene.get('coaching_signals',[]))}"
         enriched.append({"scene_id": scene["scene_id"], "start_mp4_sec": scene["start_sec"],
                          "end_mp4_sec": scene["end_sec"], "vlm_unverified_summary": scene.get("why"),
-                         "timeline_alignment": ("user_anchor_estimate_not_independently_verified"
-                                                if offset_sec is not None else "unavailable_no_clock_anchor"),
+                         "timeline_alignment": sync_alignment,
                          "game_time_range_sec_estimate": ([round(start_game_sec, 3), round(end_game_sec, 3)]
                                                            if offset_sec is not None else None),
                          "riot_event_records": events,
@@ -188,7 +193,9 @@ def build(args) -> Path:
                                   "assists": player.get("assists"), "win": player.get("win"),
                                   "final_items_only": [player.get(f"item{n}") for n in range(7)]}
                                  if player else None),
-        "mp4_minus_game_seconds_user_anchor": round(offset_sec, 3) if offset_sec is not None else None,
+        "mp4_minus_game_seconds_user_anchor": round(offset_sec, 3) if offset_sec is not None and sync_source == "user_anchor" else None,
+        "mp4_minus_game_seconds_estimate": round(offset_sec, 3) if offset_sec is not None else None,
+        "clock_sync_source": sync_source,
         "scenes": enriched,
         "warnings": ["USER confirmation of matching VOD and Match ID is NOT automated video verification",
                      "No anchor => timeline events are not attached to scenes",
@@ -201,7 +208,8 @@ def build(args) -> Path:
     path = output / "context_bundle.json"
     if path.exists():
         previous = load(path)
-        important = ("match_id", "data_dragon_version", "mp4_minus_game_seconds_user_anchor", "champion")
+        important = ("match_id", "data_dragon_version", "mp4_minus_game_seconds_user_anchor",
+                     "mp4_minus_game_seconds_estimate", "clock_sync_source", "champion")
         if any(previous.get(k) != data.get(k) for k in important):
             raise FileExistsError("기존 context_bundle과 입력이 다릅니다. 원본 보존 위해 --discovery-id를 새로 복사해 사용하거나 riot_rag 폴더 별도 백업 후 변경하세요")
     dump(path, data)
@@ -228,6 +236,8 @@ def main(argv=None):
     b.add_argument("--confirm-same-match", action="store_true", help="User verified recording is this exact match")
     b.add_argument("--sync-video", help="MP4 clock observed at one common action, e.g. 01:15")
     b.add_argument("--sync-game", help="Game HUD clock at the SAME action, e.g. 01:12")
+    b.add_argument("--sync-source", choices=["user_anchor", "ocr_clock"], default="user_anchor",
+                   help="Audit the origin of a clock offset (manual or OCR-derived)")
     b.add_argument("--fetch", action="store_true", help="Fetch missing Riot match/timeline JSON using RIOT_API_KEY")
     b.add_argument("--region", default="asia", choices=sorted(RIOT_REGIONS))
     b.add_argument("--patch-mode", choices=["match", "latest"], default="match")

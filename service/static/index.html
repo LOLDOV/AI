@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLDOV · VOD 코칭</title>
+<style>
+:root{color-scheme:dark;--bg:#0e1119;--card:#181f2d;--stroke:#313b4d;--muted:#a9b6ca;--accent:#7ed4c4}
+*{box-sizing:border-box}body{background:var(--bg);color:#f0f4f8;font:15px/1.55 system-ui,-apple-system,'Malgun Gothic',sans-serif;margin:0}
+main{max-width:940px;padding:34px 18px 70px;margin:auto}h1{font-size:29px;margin:0 0 4px}h2{font-size:18px;margin:0 0 12px}p{color:var(--muted);margin:6px 0 17px}
+section{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:22px;margin:18px 0}
+fieldset{border:0;padding:0;margin:0;display:flex;gap:10px;flex-wrap:wrap}input,select{background:#0f1420;color:#fff;border:1px solid #46536b;border-radius:9px;padding:11px 12px;font-size:15px;min-width:170px;max-width:100%}
+input[type=file]{width:100%}button{background:#83dccb;color:#0e1921;border:0;border-radius:9px;padding:10px 15px;font-size:14px;font-weight:700;cursor:pointer}button.secondary{background:#303c4c;color:white}button:disabled{opacity:.5;cursor:not-allowed}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.muted{color:var(--muted);font-size:13px}.hidden{display:none!important}
+.match{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #3a485a;padding:12px;margin:9px 0;border-radius:10px;cursor:pointer;transition:border-color .1s}
+.match input{min-width:0}.match:has(input:checked){border-color:#83dccb;background:#1e3337}.match small{color:var(--muted)}
+#notice{padding:14px;border-radius:10px;margin:18px 0;white-space:pre-wrap;background:#222a38}#notice:empty{display:none}
+pre{white-space:pre-wrap;background:#0e1522;padding:13px;border-radius:8px;overflow-wrap:anywhere;font-size:12px}
+.summary{border-top:1px solid #354355;padding-top:14px;margin-top:14px}.facts{color:#d9e7f4}li{margin-bottom:7px}
+</style></head><body><main>
+<div class="between"><div><h1>LOLDOV <span style="font-size:14px;color:var(--accent)">VOD AI Coach</span></h1><p>서비스 로그인 → Riot 경기 선택 → MP4 업로드 → 분석 리포트</p></div><button id="logout" class="secondary hidden">로그아웃</button></div>
+<div id="notice" role="status"></div>
+<section id="auth"><h2>1. 서비스 계정 로그인</h2><p>아래 계정은 LOLDOV의 <b>로컬 테스트용 로그인</b>입니다. Riot 계정 비밀번호는 입력하지 마세요.</p>
+<fieldset><input id="username" placeholder="서비스 아이디" autocomplete="username"><input id="password" placeholder="서비스 비밀번호 (10자 이상)" autocomplete="current-password" type="password"><button id="login">로그인</button><button id="register" class="secondary">회원가입</button></fieldset></section>
+<section id="riot" class="hidden"><h2>2. Riot ID 최초 등록</h2><p>Riot ID를 등록하면 API로 경기 기록을 조회합니다. <b>계정 소유권을 인증하는 Riot RSO 로그인은 아닙니다.</b></p>
+<fieldset><input id="riot-id" placeholder="게임이름#KR1" style="flex:1"><select id="region"><option value="asia">아시아 (한국)</option><option value="americas">아메리카</option><option value="europe">유럽</option><option value="sea">동남아</option></select><button id="link">Riot ID 등록</button></fieldset>
+<p id="linked"></p></section>
+<section id="matches" class="hidden"><div class="between"><h2>3. 대전 기록에서 경기 선택</h2><button id="refresh" class="secondary">기록 새로고침</button></div><p>이번 단계에서 경기를 선택하면 Match ID·챔피언·패치가 자동 전달됩니다. 영상과 동일한 경기를 선택해야 해요.</p><div id="match-list"></div></section>
+<section id="upload" class="hidden"><h2>4. 동일 경기 MP4 영상 업로드</h2><p id="selected"></p><fieldset><input type="file" id="file" accept="video/mp4,.mp4"><button id="start">분석 시작 (Gemini 유료 API)</button></fieldset><p class="muted">현재는 로컬 PC에서 동작합니다. 2GiB 이하 MP4. 기본 모드는 Riot+RAG 코칭 5건이며 유료 Gemini 호출이 발생합니다. 시간 OCR이 불확실하면 타임라인 사건 연결 없이 코칭합니다.</p></section>
+<section id="jobs" class="hidden"><div class="between"><h2>5. 분석 진행 및 결과</h2><button id="refresh-jobs" class="secondary">상태 갱신</button></div><div id="job-list"></div><div id="report"></div></section>
+<footer class="muted">연구용 로컬 프로토타입입니다. Riot RSO 인증·상용 인증 보안·자동 동일 경기 검증 및 OCR 동기화 보장은 제공하지 않습니다.</footer>
+</main><script>
+const $=(id)=>document.getElementById(id);let selected=null,currentJob=null;
+function notice(s){$('notice').textContent=s||''}
+async function api(path,options={}){let r=await fetch(path,{credentials:'same-origin',...options});let data=await r.json();if(!r.ok)throw Error(data.detail||'요청 실패');return data}
+function jsonOpts(value){return {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)}}
+function display(id,yes){$(id).classList.toggle('hidden',!yes)}
+const t=(v)=>`${String(Math.floor(v/60)).padStart(2,'0')}:${String(Math.round(v%60)).padStart(2,'0')}`;
+function node(tag,text,cl){let e=document.createElement(tag);if(text!=null)e.textContent=text;if(cl)e.className=cl;return e}
+async function refreshMe(){try{let m=await api('/api/me');display('auth',false);display('logout',true);display('riot',true);$('linked').textContent=m.riot_id?`현재 연결: ${m.riot_id} (소유권 미검증)`:'';
+if(m.riot_id){$('riot-id').value=m.riot_id;display('matches',true);display('jobs',true);await Promise.all([loadMatches(),loadJobs()]);}}catch(e){display('auth',true);display('logout',false);display('riot',false);display('matches',false);display('upload',false);display('jobs',false)}}
+for(let name of ['login','register']) $(name).onclick=async()=>{try{let v=await api('/api/auth/'+name,jsonOpts({username:$('username').value,password:$('password').value}));notice('서비스 계정 '+(name==='login'?'로그인':'생성')+' 완료');await refreshMe()}catch(e){notice(e.message)}};
+$('logout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});location.reload()};
+$('link').onclick=async()=>{try{let r=await api('/api/riot/link',jsonOpts({riot_id:$('riot-id').value,region:$('region').value}));notice('Riot ID 조회 완료. 이 연결은 계정 소유권 인증이 아닙니다.');await refreshMe()}catch(e){notice(e.message)}};
+async function loadMatches(){let box=$('match-list');box.replaceChildren(node('p','대전 기록 조회 중...'));try{let data=await api('/api/riot/matches?days=30&count=20');box.replaceChildren();if(!data.matches.length)box.appendChild(node('p','최근 해당 기간의 소환사의 협곡 기록이 없습니다.'));
+for(let m of data.matches){let label=node('label',null,'match');let radio=document.createElement('input');radio.type='radio';radio.name='match';radio.value=m.match_id;let txt=node('div',null);txt.appendChild(node('strong',`${m.champion} · ${m.role} · ${m.win?'승리':'패배'}`));txt.appendChild(node('div',`${t(m.duration_sec)} · K/D/A ${m.kills}/${m.deaths}/${m.assists} · 패치 ${m.game_version}`,'muted'));txt.appendChild(node('small',`${m.match_id} · ${m.start_timestamp?new Date(m.start_timestamp).toLocaleString('ko-KR'):''}`));label.append(radio,txt);radio.onchange=()=>{selected=m;$('selected').textContent=`선택한 경기: ${m.champion}, ${m.match_id}, ${t(m.duration_sec)}. 정확한 영상인지 확인하세요.`;display('upload',true)};box.appendChild(label)}}catch(e){box.replaceChildren(node('p',e.message));notice(e.message)}}
+$('refresh').onclick=loadMatches;
+$('start').onclick=async()=>{if(!selected||!$('file').files.length){notice('경기와 MP4를 선택하세요');return}if(!confirm(`선택 경기 ${selected.match_id}의 실제 녹화 영상이 맞나요?\n선택 후 Gemini 유료 API 호출이 진행됩니다.`))return;
+let fd=new FormData();fd.append('match_id',selected.match_id);fd.append('video',$('file').files[0]);$('start').disabled=true;notice('영상 업로드 및 경기 확인 중...');try{let r=await api('/api/analyses',{method:'POST',body:fd});currentJob=r.job_id;notice(`분석 접수: ${r.discovery_id}. 자동으로 이어서 처리됩니다.`);await loadJobs()}catch(e){notice(e.message)}finally{$('start').disabled=false}};
+async function loadJobs(){let data=await api('/api/analyses');let box=$('job-list');box.replaceChildren();for(let j of data.jobs){let wrap=node('div',null,'summary');wrap.appendChild(node('strong',`${j.discovery_id} · ${j.status} · ${j.stage}`));wrap.appendChild(node('p',`경기 ${j.match_id} · 시간동기화: ${j.sync_status}${j.error?' · 오류: '+j.error:''}`));if(j.status==='complete'){let b=node('button','코칭 리포트 보기','secondary');b.onclick=()=>showReport(j.id);wrap.appendChild(b)}box.appendChild(wrap)}}
+$('refresh-jobs').onclick=()=>loadJobs().catch(e=>notice(e.message));
+async function showReport(id){try{let r=await api('/api/analyses/'+id+'/report');let box=$('report');box.replaceChildren(node('h2',`코칭 리포트 · 패치 ${r.patch}`),node('p',r.warning));for(let s of r.scene_results){let wrap=node('div',null,'summary');wrap.appendChild(node('h2',`${s.scene_id} · ${t(s.mp4_range[0])} ~ ${t(s.mp4_range[1])}`));wrap.appendChild(node('p',`Riot 이벤트 ${s.riot_events}건 · Gemini ${s.latency_sec}초`));wrap.appendChild(node('p',s.coaching?.summary||''));for(let k of ['praise','improvements','unknowns']){wrap.appendChild(node('strong',({praise:'좋았던 점',improvements:'개선점',unknowns:'확인 불가'}[k])));let ul=node('ul');for(let val of (s.coaching?.[k]||[]))ul.appendChild(node('li',val));wrap.appendChild(ul)}box.appendChild(wrap)}}catch(e){notice(e.message)}}
+refreshMe();setInterval(()=>{if(!$('jobs').classList.contains('hidden'))loadJobs().catch(()=>{});},12000);
+</script></body></html>

@@ -1,38 +1,32 @@
-# Python virtual environments
-.venv/
-venv/
-
-# Python caches and tooling
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.ipynb_checkpoints/
-
-# Secrets and local environment (keep example templates)
+# Secrets
 .env
 .env.*
 !.env.example
 
-# Local IDE / OS files
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# VOD, personal Riot data, and generated analysis outputs
+# Runtime data
+/data/riot/
+/data/service/
 /videos/
-/data/
 /results/
+
+# Databases and logs
+*.sqlite3
+*.sqlite3-*
+*.log
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Large files
 *.mp4
 *.avi
 *.mkv
 *.mov
-
-# Model weights and logs
 *.pt
 *.pth
 *.ckpt
 *.safetensors
-*.log
+.vscode/

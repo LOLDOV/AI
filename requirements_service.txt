@@ -1,0 +1,8 @@
+# Install ON TOP OF your existing pipeline and RAG environments.
+fastapi>=0.110,<1.0
+uvicorn>=0.29,<1.0
+python-multipart>=0.0.9,<1.0
+# Optional for automatic HUD timer OCR (requires the Windows Tesseract EXE as well):
+# pytesseract>=0.3.10
+# Local integration tests use FastAPI TestClient:
+httpx>=0.25,<1.0
