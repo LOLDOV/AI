@@ -103,7 +103,7 @@ python -m unittest discover -s tests -p test_auto_service.py -v
 python -m uvicorn service.app:app --host 127.0.0.1 --port 8765
 ```
 
-웹 접속: `https://actors-raising-hans-hear.trycloudflare.com/`
+웹 접속: `https://168-110-28-55.sslip.io/`
 
 로컬 개발용 서비스
 
