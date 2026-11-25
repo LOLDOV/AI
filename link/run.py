@@ -1,6 +1,7 @@
 """Death-scene pipeline runner and comparison conditions.
 
-  full      OCR time sync + Riot records + patch docs
+  full      OCR time sync + Riot records + patch docs + claim verification
+  no_verify same generation as full, verification not applied (no extra Gemini call)
   no_rag    patch docs removed
   no_ocr    time sync by VLM clock reading instead of OCR
   vlm_only  no OCR / Riot / docs; scenes picked by pipeline discover, frames only
@@ -25,15 +26,16 @@ from pathlib import Path
 
 from pipeline.core import ROOT, dump, load, safe_id, video_meta
 
-from . import coach, riot_facts, timesync, vlm_clock
+from . import coach, riot_facts, timesync, verify, vlm_clock
 from .patch_docs import PatchDocs
 from .timesync import mmss
 
-CONDITIONS = {  # time sync, Riot records, patch docs
-    'full': ('ocr', True, True),
-    'no_rag': ('ocr', True, False),
-    'no_ocr': ('vlm', True, True),
-    'vlm_only': (None, False, False),
+CONDITIONS = {  # time sync, Riot records, patch docs, verification
+    'full': ('ocr', True, True, True),
+    'no_verify': ('ocr', True, True, False),
+    'no_rag': ('ocr', True, False, True),
+    'no_ocr': ('vlm', True, True, True),
+    'vlm_only': (None, False, False, False),
 }
 BEFORE, AFTER, FRAMES = 14.0, 2.0, 8
 OUT = ROOT / 'results' / 'link'
@@ -153,7 +155,7 @@ def run(args):
 
     summary = {}
     for cond in conditions:
-        align, use_records, use_docs = CONDITIONS[cond]
+        align, use_records, use_docs, use_verify = CONDITIONS[cond]
         if align == 'vlm' and 'vlm' not in syncs:
             continue
         if align:
@@ -180,37 +182,51 @@ def run(args):
                 gen = {'coaching': coaching, 'latency_sec': reply['latency_sec'],
                        'token_usage': reply['token_usage'], 'raw_text': reply['raw_text']}
                 dump(cache, gen)
-            text, evidence = render(gen['coaching'], records, docs)
+            started = time.monotonic()
+            checked = verify.verify(gen['coaching'], verify.build_context(frames, records, docs, docs_index, match, death))
+            verify_sec = round(time.monotonic() - started, 3) if use_verify else 0.0
+            shown = verify.apply(gen['coaching'], checked) if use_verify else {**gen['coaching'], 'held_claims': []}
+            text, evidence = render(shown, records, docs)
             results.append({
                 'condition': cond, 'video_id': vid, 'scene_id': sc['scene_id'], 'type': sc['type'],
                 'death_game_time': mmss(death['game_sec']) if death else None,
                 'killer': death['killer'] if death else None,
                 'start_sec': sc['start_sec'], 'end_sec': sc['end_sec'], 'start': mmss(sc['start_sec']), 'end': mmss(sc['end_sec']),
                 'hud': timesync.hud_at(rows, sc['anchor_sec']) if align == 'ocr' else None,
-                'coaching': gen['coaching'], 'coaching_text': text, 'evidence_text': evidence,
+                'coaching': shown, 'claims_held': shown['held_claims'], 'coaching_text': text, 'evidence_text': evidence,
+                'check': {'applied': use_verify, 'counts': checked['counts'], 'support_rate': checked['support_rate']},
                 'records': records, 'docs': docs, 'frames': [f['id'] for f in frames],
-                'vlm_sec': gen['latency_sec'], 'prep_sec': prep_sec, 'token_usage': gen['token_usage'],
+                'vlm_sec': gen['latency_sec'], 'prep_sec': prep_sec, 'verify_sec': verify_sec, 'token_usage': gen['token_usage'],
                 'vlm_reason': sc.get('vlm_reason')})
         done = [r for r in results if not r.get('skipped')]
         vlm_total = round(sum(r['vlm_sec'] for r in done), 2)
         total = (align_sec or 0) + (riot_sec if use_records else 0) + (docs_sec if use_docs else 0) \
-            + vlm_total + sum(r['prep_sec'] for r in done)
+            + vlm_total + sum(r['prep_sec'] + r['verify_sec'] for r in done)
         summary[cond] = {'scenes': len(done), 'skipped': len(results) - len(done), 'time_sync': align or 'none',
                          'align_sec': align_sec, 'riot_sec': riot_sec if use_records else 0,
                          'docs_sec': docs_sec if use_docs else 0, 'vlm_sec_total': vlm_total,
                          'total_sec': round(total, 2), 'avg_sec_per_scene': round(total / len(done), 2) if done else None,
                          'gemini_calls': len(done) + (syncs[align].get('api_calls', 0) if align else 0),
-                         'tokens_total': sum((r['token_usage'] or {}).get('total_tokens') or 0 for r in done)}
+                         'tokens_total': sum((r['token_usage'] or {}).get('total_tokens') or 0 for r in done),
+                         'verification': use_verify, 'claims_shown': sum(len(r['coaching']['claims']) for r in done),
+                         'claims_held': sum(len(r['claims_held']) for r in done),
+                         'auto_support_rate_before_verify': _support_rate(done)}
         folder = out / cond
         folder.mkdir(exist_ok=True)
         dump(folder / 'results.json', results)
         _scenes_csv(folder / 'scenes.csv', results)
         print(f"  {cond}: {len(done)} scenes, {summary[cond]['total_sec']} s")
     dump(out / 'summary.json', {'plan': plan, 'conditions': summary,
-                                'notes': ['total_sec = time sync + Riot load + docs load + Gemini + prompt prep',
+                                'notes': ['total_sec = time sync + Riot load + docs load + Gemini + prompt prep + verification',
+                                          'no_verify reuses the full generation; only the verification step differs',
                                           'vlm_only align_sec is the discover time of this run (short when resumed from cache)',
                                           'HUD level is not read by the OCR (clock and team kills only)']})
     return out
+
+
+def _support_rate(done: list):
+    total = sum(sum(r['check']['counts'].values()) for r in done)
+    return round(sum(r['check']['counts']['supported'] for r in done) / total, 3) if total else None
 
 
 def _scenes_csv(path: Path, results: list):
