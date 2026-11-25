@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from vlm.scene_analyzer import THINKING_TOKENS
+
 # 코칭 리포트 생성.
 #  - 장면별 코칭: VLM 분석이 있으면 그 결과(실수·대안)를, 없으면 킬 수지 기반 규칙 코칭을 쓴다.
 #  - 경기 총평: LLM을 쓸 수 있으면 장면 분석을 모아 요약하고, 아니면 구간별 킬 격차로 규칙 기반 요약.
@@ -193,7 +195,7 @@ def llm_game_summary(ctx, vlm_items):
                    for s in ctx['scene_coaching']],
     }
     response = client.chat.completions.create(
-        model=model, max_tokens=1500,
+        model=model, max_tokens=1500 + THINKING_TOKENS,
         messages=[{'role': 'user', 'content': GAME_PROMPT + '\n\n' + json.dumps(payload, ensure_ascii=False)}],
     )
     return parse_json(response.choices[0].message.content or '')
@@ -259,5 +261,5 @@ def answer_question(result_dir, question, history=None):
         if turn.get('role') in ('user', 'assistant') and turn.get('content'):
             messages.append({'role': turn['role'], 'content': str(turn['content'])[:2000]})
     messages.append({'role': 'user', 'content': question[:2000]})
-    response = client.chat.completions.create(model=model, messages=messages, max_tokens=900)
+    response = client.chat.completions.create(model=model, messages=messages, max_tokens=900 + THINKING_TOKENS)
     return response.choices[0].message.content or ''

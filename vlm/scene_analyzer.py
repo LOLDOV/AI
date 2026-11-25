@@ -14,7 +14,9 @@ from openai import OpenAI
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / '.env')
 
-MAX_TOKENS = 1800
+# Gemini 등 '생각' 토큰도 max_tokens에 포함하는 모델은 .env의 VLM_THINKING_TOKENS 만큼 한도를 늘린다
+THINKING_TOKENS = int(os.getenv('VLM_THINKING_TOKENS', '0'))
+MAX_TOKENS = 1800 + THINKING_TOKENS
 
 PROMPT = """당신은 리그 오브 레전드(LoL) 리플레이를 복기하는 코치입니다.
 아래 이미지는 한 장면의 프레임을 시간순으로 나열한 것이고, 각 이미지 앞에 프레임 ID와 게임 시간이 붙어 있습니다.
