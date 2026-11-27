@@ -1,0 +1,16 @@
+﻿video,champion,match_id,recorded_at,drive_file,patch,video_time_at_game_0000,video_length,split,resolution,note
+LOL_002,Kaisa,,,LOL_002.mp4,,-00:08,,test,,웹 예시 경기 / Match ID 없음 / 데스 1건
+LOL_004,Sion,,,LOL_004.mp4,,-00:04,,test,,웹 예시 경기 / Match ID 없음 / 데스 5건
+LOL_009,Lee Sin,,,LOL_009.mp4,,-00:05,,test,,웹 예시 경기 / Match ID 없음 / 데스 2건
+LOL_018,Lulu,,,LOL_018.mp4,,-00:05,,test,,웹 예시 경기 / Match ID 없음 / 데스 5건
+LOL_024,Qiyana,,,LOL_024.mp4,,-00:03,,test,,웹 예시 경기 / Match ID 없음 / 데스 5건
+LOL_031,Vex,KR_8440947724,2026/11/01 15:28,LOL_031.mp4,,00:00,,,,데스 0건 → 죽을 뻔한 장면만
+LOL_032,Lux,KR_8439238027,,LOL_032.mp4,,00:01,,,,데스 0건 → 죽을 뻔한 장면만
+LOL_033,Kaisa,KR_8442419180,,LOL_033.mp4,16.21,00:01,,,,데스 2건 / 경기 26:30
+LOL_034,,,,LOL_034.mp4,,,,,,Match ID 확인 필요 (평가 제외)
+LOL_035,Seraphine,KR_8436844837,,LOL_035.mp4,16.21,00:00,,,,데스 7건 / 경기 28:41
+LOL_036,Malphite,KR_8444513544,,LOL_036.mp4,16.21,00:00,,,,데스 3건 / 경기 10:49 (짧음)
+LOL_037,,,,LOL_037.mp4,,,,,,Match ID 확인 필요 (평가 제외)
+LOL_038,Kaisa,KR_8446364810,,LOL_038.mp4,,00:01,,,,데스 0건 → 죽을 뻔한 장면만
+LOL_039,Kaisa,KR_8446406465,,LOL_039.mp4,16.22,00:01,,,,데스 1건 / 경기 17:02
+LOL_040,Lux,KR_8448523943,,LOL_040.mp4,16.22,00:01,,,,데스 2건 / 경기 16:42

@@ -1,6 +1,6 @@
 ﻿video,start_sec,end_sec,type,scene_id,importance
 LOL_002,693,703,death,S01,3
-LOL_004,417,424,death,S01,2
+LOL_004,417,423,death,S01,2
 LOL_004,288,292,event_free_near_death,S02,2
 LOL_004,735,742,death,S03,4
 LOL_004,932,938,death,S04,5
